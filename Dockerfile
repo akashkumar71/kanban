@@ -8,9 +8,10 @@ RUN npm run build
 
 FROM python:3.11-slim
 
-RUN pip install fastapi uvicorn aiofiles
-
 WORKDIR /app
+
+COPY backend/pyproject.toml backend/pyproject.toml
+RUN pip install --no-cache-dir fastapi uvicorn aiofiles httpx python-dotenv
 
 COPY backend/ backend/
 COPY --from=frontend-builder /app/frontend/out frontend/out
