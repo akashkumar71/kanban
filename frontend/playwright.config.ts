@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import path from "path";
 
 export default defineConfig({
   testDir: "./tests",
@@ -7,14 +8,19 @@ export default defineConfig({
     timeout: 10_000,
   },
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://127.0.0.1:8765",
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run dev -- --hostname 127.0.0.1 --port 3000",
-    url: "http://127.0.0.1:3000",
+    command: ".venv\\Scripts\\python.exe -m uvicorn backend.main:app --port 8765",
+    cwd: path.join(__dirname, ".."),
+    url: "http://127.0.0.1:8765",
     reuseExistingServer: true,
-    timeout: 120_000,
+    timeout: 30_000,
+    env: {
+      ...process.env,
+      DB_PATH: "test-kanban.db",
+    },
   },
   projects: [
     {

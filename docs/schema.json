@@ -1,0 +1,43 @@
+{
+  "database": "SQLite",
+  "tables": {
+    "users": {
+      "description": "One row per user. MVP has a single hardcoded user.",
+      "columns": {
+        "id": { "type": "INTEGER", "primaryKey": true, "autoIncrement": true },
+        "username": { "type": "TEXT", "notNull": true, "unique": true },
+        "created_at": { "type": "TEXT", "notNull": true, "default": "datetime('now')" }
+      }
+    },
+    "boards": {
+      "description": "One board per user.",
+      "columns": {
+        "id": { "type": "INTEGER", "primaryKey": true, "autoIncrement": true },
+        "user_id": { "type": "INTEGER", "notNull": true, "references": "users(id)" },
+        "title": { "type": "TEXT", "notNull": true, "default": "My Board" },
+        "created_at": { "type": "TEXT", "notNull": true, "default": "datetime('now')" }
+      }
+    },
+    "columns": {
+      "description": "Ordered columns belonging to a board.",
+      "columns": {
+        "id": { "type": "TEXT", "primaryKey": true, "note": "slug e.g. col-backlog" },
+        "board_id": { "type": "INTEGER", "notNull": true, "references": "boards(id)" },
+        "title": { "type": "TEXT", "notNull": true },
+        "position": { "type": "INTEGER", "notNull": true, "note": "0-based display order" },
+        "created_at": { "type": "TEXT", "notNull": true, "default": "datetime('now')" }
+      }
+    },
+    "cards": {
+      "description": "Ordered cards belonging to a column.",
+      "columns": {
+        "id": { "type": "TEXT", "primaryKey": true, "note": "slug e.g. card-1" },
+        "column_id": { "type": "TEXT", "notNull": true, "references": "columns(id)" },
+        "title": { "type": "TEXT", "notNull": true },
+        "details": { "type": "TEXT", "notNull": true, "default": "" },
+        "position": { "type": "INTEGER", "notNull": true, "note": "0-based display order within column" },
+        "created_at": { "type": "TEXT", "notNull": true, "default": "datetime('now')" }
+      }
+    }
+  }
+}

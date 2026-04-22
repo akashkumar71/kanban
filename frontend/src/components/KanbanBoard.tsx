@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -13,19 +13,35 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
+import { ChatSidebar } from "@/components/ChatSidebar";
+import { createId, moveCard, type BoardData } from "@/lib/kanban";
+import { fetchBoard, saveBoard } from "@/lib/api";
 
-export const KanbanBoard = () => {
-  const [board, setBoard] = useState<BoardData>(() => initialData);
+interface Props {
+  onLogout?: () => void;
+}
+
+export const KanbanBoard = ({ onLogout }: Props) => {
+  const [board, setBoard] = useState<BoardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetchBoard()
+      .then(setBoard)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
-  const cardsById = useMemo(() => board.cards, [board.cards]);
+  const applyAndSave = useCallback((next: BoardData) => {
+    setBoard(next);
+    saveBoard(next).catch((err) => setError(err.message));
+  }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveCardId(event.active.id as string);
@@ -34,62 +50,74 @@ export const KanbanBoard = () => {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveCardId(null);
-
-    if (!over || active.id === over.id) {
-      return;
-    }
-
-    setBoard((prev) => ({
-      ...prev,
-      columns: moveCard(prev.columns, active.id as string, over.id as string),
-    }));
-  };
-
-  const handleRenameColumn = (columnId: string, title: string) => {
-    setBoard((prev) => ({
-      ...prev,
-      columns: prev.columns.map((column) =>
-        column.id === columnId ? { ...column, title } : column
-      ),
-    }));
-  };
-
-  const handleAddCard = (columnId: string, title: string, details: string) => {
-    const id = createId("card");
-    setBoard((prev) => ({
-      ...prev,
-      cards: {
-        ...prev.cards,
-        [id]: { id, title, details: details || "No details yet." },
-      },
-      columns: prev.columns.map((column) =>
-        column.id === columnId
-          ? { ...column, cardIds: [...column.cardIds, id] }
-          : column
-      ),
-    }));
-  };
-
-  const handleDeleteCard = (columnId: string, cardId: string) => {
-    setBoard((prev) => {
-      return {
-        ...prev,
-        cards: Object.fromEntries(
-          Object.entries(prev.cards).filter(([id]) => id !== cardId)
-        ),
-        columns: prev.columns.map((column) =>
-          column.id === columnId
-            ? {
-                ...column,
-                cardIds: column.cardIds.filter((id) => id !== cardId),
-              }
-            : column
-        ),
-      };
+    if (!over || active.id === over.id || !board) return;
+    applyAndSave({
+      ...board,
+      columns: moveCard(board.columns, active.id as string, over.id as string),
     });
   };
 
-  const activeCard = activeCardId ? cardsById[activeCardId] : null;
+  const handleRenameColumn = (columnId: string, title: string) => {
+    if (!board) return;
+    applyAndSave({
+      ...board,
+      columns: board.columns.map((col) =>
+        col.id === columnId ? { ...col, title } : col
+      ),
+    });
+  };
+
+  const handleAddCard = (columnId: string, title: string, details: string) => {
+    if (!board) return;
+    const id = createId("card");
+    applyAndSave({
+      ...board,
+      cards: {
+        ...board.cards,
+        [id]: { id, title, details: details || "No details yet." },
+      },
+      columns: board.columns.map((col) =>
+        col.id === columnId
+          ? { ...col, cardIds: [...col.cardIds, id] }
+          : col
+      ),
+    });
+  };
+
+  const handleDeleteCard = (columnId: string, cardId: string) => {
+    if (!board) return;
+    applyAndSave({
+      ...board,
+      cards: Object.fromEntries(
+        Object.entries(board.cards).filter(([id]) => id !== cardId)
+      ),
+      columns: board.columns.map((col) =>
+        col.id === columnId
+          ? { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) }
+          : col
+      ),
+    });
+  };
+
+  const activeCard =
+    board && activeCardId ? board.cards[activeCardId] : null;
+  const cardsById = useMemo(() => board?.cards ?? {}, [board]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-[var(--gray-text)]">Loading board…</p>
+      </div>
+    );
+  }
+
+  if (error || !board) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-red-500">{error ?? "Failed to load board."}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="relative overflow-hidden">
@@ -111,13 +139,23 @@ export const KanbanBoard = () => {
                 and capture quick notes without getting buried in settings.
               </p>
             </div>
-            <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
-                Focus
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
-                One board. Five columns. Zero clutter.
-              </p>
+            <div className="flex items-start gap-4">
+              <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
+                  Focus
+                </p>
+                <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
+                  One board. Five columns. Zero clutter.
+                </p>
+              </div>
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="rounded-xl border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)] transition hover:border-[var(--navy-dark)] hover:text-[var(--navy-dark)]"
+                >
+                  Sign out
+                </button>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4">
@@ -160,6 +198,8 @@ export const KanbanBoard = () => {
           </DragOverlay>
         </DndContext>
       </main>
+
+      <ChatSidebar onBoardUpdate={setBoard} />
     </div>
   );
 };
